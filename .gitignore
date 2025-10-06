@@ -14,3 +14,10 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# gitkeep
+data/*
+!data/.gitkeep
+!data/ingest/.gitkeep
+!data/processed/.gitkeep
+!data/searchable/.gitkeep
