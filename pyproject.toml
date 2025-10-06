@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "indexed189"
+version = "0.1.0"
+description = "Utilities and CLI helpers for the CS 189 markdown corpus"
+authors = [{ name = "Indexed189 Maintainers" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1",
+]
+
+[project.scripts]
+indexed189 = "indexed189.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
