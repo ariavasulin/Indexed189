@@ -16,7 +16,6 @@ A lightweight command line toolchain for converting course assets (PPTX, PDF, IP
 - Mathpix and OpenAI API credentials.
 
 ## Setup
-0. You will need a Mathpix and OpenAI API key
 1. Clone the repo and open a terminal in the project root.
 2. (Optional) Create and activate a virtual environment.
    ```bash
