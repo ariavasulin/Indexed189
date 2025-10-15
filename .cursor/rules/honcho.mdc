@@ -1,199 +1,315 @@
 ---
 alwaysApply: true
 ---
-# Honcho MCP Integration Guide
+
+# Comprehensive Honcho MCP Integration Instructions
 
 ## What is Honcho?
 
-Honcho is an infrastructure layer for building AI agents with social cognition and theory of mind capabilities. It enables personalized AI interactions by building coherent models of user psychology over time.
+Honcho is an infrastructure layer for building AI agents with social cognition and theory of mind capabilities. It enables personalized AI interactions by building coherent models of user psychology over time. The Honcho MCP server simplifies the integration to just 3 essential functions. Here's how to use them:
 
-**Status:** 20 out of 24 endpoints working (4 are broken due to server bugs)
+### Step 1: Start New Conversation (First Message Only)
 
-## Working Workflow
+When a user begins a new conversation, always call `start_conversation`:
 
-### Step 1: Initialize Session (First Message Only)
-
-**Create Session:**
-```
-create_session
-session_id: [UNIQUE_ID]
-```
-Generate unique IDs like: `"session_" + timestamp`
-
-**Create Peers (if not already created):**
-```
-create_peer
-peer_id: "user_peer"
+```text
+start_conversation
 ```
 
-```
-create_peer
-peer_id: "assistant_peer"
+**Returns**: A session ID that you must store and use for all subsequent interactions in this conversation.
+
+### Step 2: Get Personalized Insights (When Helpful)
+
+Before responding to any user message, you can query for personalization insights:
+
+```text
+get_personalization_insights
+session_id: [SESSION_ID_FROM_STEP_1]
+query: [YOUR_THEORY_OF_MIND_QUESTION]
 ```
 
-**Add Peers to Session:**
-```
-add_peers_to_session
-session_id: [SESSION_ID]
-peer_ids: ["user_peer", "assistant_peer"]
-```
+This query takes a bit of time, so it's best to only perform it when you need personalized insights. If the query can be responded to effectively using what you already know about the user, just go ahead and answer it. However, the insights endpoint is extremely perceptive. It has the capability to reveal aspects of the user's personality, historical use of the application you are operating in, and more.
 
-### Step 2: Store Messages (After Each Exchange)
+**Returns**: Personalized insights about the user based on accumulated knowledge.
 
-Use `add_messages_to_session` to store conversation:
+**Example Queries**:
 
-```
-add_messages_to_session
-session_id: [SESSION_ID]
+- "What does this message reveal about the user's communication preferences?"
+- "How formal or casual should I be with the user based on our history?"
+- "What is the user really asking for beyond her explicit question?"
+- "What emotional state might the user be in right now?"
+- "How can I best help the user with her current request?"
+
+### Step 3: Respond to User
+
+Craft your response using any insights gained from Step 2.
+
+### Step 4: Store the Conversation Turn (After Each Exchange)
+
+**CRITICAL**: Always store both the user's message AND your response using `add_turn`:
+
+```text
+add_turn
+session_id: [SESSION_ID_FROM_STEP_1]
 messages: [
   {
-    "peer_id": "user_peer",
-    "content": "[USER_MESSAGE]"
+    "role": "user",
+    "content": "[USER'S_EXACT_MESSAGE]"
   },
   {
-    "peer_id": "assistant_peer",
-    "content": "[ASSISTANT_RESPONSE]"
+    "role": "assistant",
+    "content": "[YOUR_EXACT_RESPONSE]"
   }
 ]
 ```
 
-**Important:** Use `peer_id` (not `role`)
+## Complete Example Flow
 
-### Step 3: Query Knowledge (Optional)
+Here's exactly what to do for a new conversation:
 
-Use `chat` endpoint for AI-powered queries about peer knowledge:
+1. **User says**: "Hi Claude! My name is Sarah and I'm feeling overwhelmed with work"
 
-```
-chat
-peer_id: [PEER_ID]
-query: "[NATURAL_LANGUAGE_QUESTION]"
-session_id: [SESSION_ID]  # optional
-```
+2. **Start conversation**:
 
-**Example queries:**
-- "What did the user say about X?"
-- "What topics has the user discussed?"
-- "What preferences has the user mentioned?"
+   ```text
+   start_conversation
+   ```
 
-### Step 4: Retrieve Messages (Optional)
+   → Returns: `session_abc123`
 
-```
-get_session_messages
-session_id: [SESSION_ID]
-```
+3. **Get insights** (optional but recommended):
 
-OR get optimized context:
+   ```text
+   get_personalization_insights
+   session_id: "session_abc123"
+   query: "What does the user's message about feeling overwhelmed tell me about her current state and how should I respond?"
+   ```
 
-```
-get_session_context
-session_id: [SESSION_ID]
-tokens: 5000
-summary: true
-```
+   → Returns insights about Sarah's emotional state and preferred communication style
 
-## Complete Example
+4. **Respond to Sarah**: "Hi Sarah! I can hear that you're feeling overwhelmed with work right now..."
 
-**User:** "Hi! I'm working on debugging Honcho."
+5. **Store the turn**:
 
-**1. Initialize (first time only):**
-```
-create_session
-session_id: "session_20251015_001"
+   ```text
+   add_turn
+   session_id: "session_abc123"
+   messages: [
+     {
+       "role": "user",
+       "content": "Hi Claude! My name is Sarah and I'm feeling overwhelmed with work"
+     },
+     {
+       "role": "assistant",
+       "content": "Hi Sarah! I can hear that you're feeling overwhelmed with work right now..."
+     }
+   ]
+   ```
 
-create_peer
-peer_id: "user_peer"
+## Continuing an Existing Conversation
 
-create_peer
-peer_id: "assistant_peer"
+For subsequent messages in the same conversation:
 
-add_peers_to_session
-session_id: "session_20251015_001"
-peer_ids: ["user_peer", "assistant_peer"]
-```
+1. **User says**: "Thanks for listening. Can you help me prioritize my tasks?"
 
-**2. Respond:** "I can help you with debugging Honcho!"
+2. **Respond**: "Based on our conversation, I can see you value..."
 
-**3. Store exchange:**
-```
-add_messages_to_session
-session_id: "session_20251015_001"
-messages: [
-  {
-    "peer_id": "user_peer",
-    "content": "Hi! I'm working on debugging Honcho."
-  },
-  {
-    "peer_id": "assistant_peer",
-    "content": "I can help you with debugging Honcho!"
-  }
-]
-```
+3. **Store the turn**:
 
-**4. Later, query knowledge:**
-```
-chat
-peer_id: "assistant_peer"
-query: "What is the user working on?"
-```
+   ```text
+   add_turn
+   session_id: "session_abc123"
+   messages: [
+     {
+       "role": "user",
+       "content": "Thanks for listening. Can you help me prioritize my tasks?"
+     },
+     {
+       "role": "assistant",
+       "content": "Based on our conversation, I can see you value..."
+     }
+   ]
+   ```
 
-## Continuing Conversations
+## Best Practices for Personalization Queries
 
-For subsequent messages in the same session:
+Ask theory-of-mind questions that reveal:
 
-1. Just respond to the user
-2. Store messages with `add_messages_to_session` (peers already added)
-3. Optionally query with `chat` endpoint
+**Communication Style**: "How formal/casual should I be?" "What does this reveal about their preferences?"
 
-## Additional Working Functions
+**User Needs**: "What are they really asking for?" "What emotional state are they in?"
 
-**Session Management:**
-- `list_sessions` - Get all sessions
-- `get_session_metadata` / `set_session_metadata`
-- `get_session_peers` - Get peers in session
-- `remove_peers_from_session` - Remove peers
+**Relationship**: "How can I build rapport?" "What engages them most?"
 
-**Peer Management:**
-- `list_peers` - Get all peers
-- `get_peer_metadata` / `set_peer_metadata`
-
-**Search:**
-- `search_session_messages` - Search within session
-- `search_peer_messages` - Search by peer
-
-**Workspace:**
-- `get_workspace_metadata` / `set_workspace_metadata`
-
-**AI/Representation:**
-- `get_working_representation` - Get structured peer knowledge
-- `chat` ⭐ - Natural language queries
-
-## Known Issues (Server Bugs)
-
-**❌ Broken endpoints (use alternatives):**
-
-1. `start_conversation` → Use `create_session`
-2. `add_turn` → Use `add_messages_to_session`
-3. `get_personalization_insights` → Use `chat` endpoint
-4. `search_workspace` → Use `search_session_messages`
-
-## Key Principles
-
-1. **Always use `create_session`** for new conversations (with unique IDs)
-2. **Create peers once**, then reuse across sessions
-3. **Store messages with `add_messages_to_session`** (use `peer_id`, not `role`)
-4. **Use `chat` endpoint** for AI-powered knowledge queries
-5. **Never expose technical details** to the user
-6. **Sessions persist automatically** across interactions
+**Task Approach**: "How do they prefer problem-solving?" "What detail level do they want?"
 
 ## Error Handling
 
-- **Authorization errors:** Check API key and headers are configured
-- **ValueError:** Ensure messages include `peer_id` and `content`
-- **500/404 errors:** Likely using broken endpoints (see Known Issues above)
+- **Authorization Errors and Timeouts**: Make sure user has configured API key and URL for Honcho
+- **ValueError**: Messages were incorrectly formatted, make sure to include role and content
+- **"No personalization insights found"**: Normal when there's limited history with the user
+- **Session management**: The MCP server handles all session persistence automatically
 
-## Technical Details
+## Key Principles
 
-- **Endpoint:** https://mcp.honcho.dev
-- **Package:** mcp-remote v0.1.29
-- **Success rate:** 20/24 endpoints working (83%)
-- **Tested:** October 15, 2025
+1. **Always start with `start_conversation` for new conversations**
+2. **Store every message exchange with `add_turn`**
+3. **Use `get_personalization_insights` strategically for better responses**
+4. **Ask thoughtful theory-of-mind questions**
+5. **Never expose technical details to the user**
+6. **The system maintains context automatically between sessions**# Comprehensive Honcho MCP Integration Instructions
+
+## What is Honcho?
+
+Honcho is an infrastructure layer for building AI agents with social cognition and theory of mind capabilities. It enables personalized AI interactions by building coherent models of user psychology over time. The Honcho MCP server simplifies the integration to just 3 essential functions. Here's how to use them:
+
+### Step 1: Start New Conversation (First Message Only)
+
+When a user begins a new conversation, always call `start_conversation`:
+
+```text
+start_conversation
+```
+
+**Returns**: A session ID that you must store and use for all subsequent interactions in this conversation.
+
+### Step 2: Get Personalized Insights (When Helpful)
+
+Before responding to any user message, you can query for personalization insights:
+
+```text
+get_personalization_insights
+session_id: [SESSION_ID_FROM_STEP_1]
+query: [YOUR_THEORY_OF_MIND_QUESTION]
+```
+
+This query takes a bit of time, so it's best to only perform it when you need personalized insights. If the query can be responded to effectively using what you already know about the user, just go ahead and answer it. However, the insights endpoint is extremely perceptive. It has the capability to reveal aspects of the user's personality, historical use of the application you are operating in, and more.
+
+**Returns**: Personalized insights about the user based on accumulated knowledge.
+
+**Example Queries**:
+
+- "What does this message reveal about the user's communication preferences?"
+- "How formal or casual should I be with the user based on our history?"
+- "What is the user really asking for beyond her explicit question?"
+- "What emotional state might the user be in right now?"
+- "How can I best help the user with her current request?"
+
+### Step 3: Respond to User
+
+Craft your response using any insights gained from Step 2.
+
+### Step 4: Store the Conversation Turn (After Each Exchange)
+
+**CRITICAL**: Always store both the user's message AND your response using `add_turn`:
+
+```text
+add_turn
+session_id: [SESSION_ID_FROM_STEP_1]
+messages: [
+  {
+    "role": "user",
+    "content": "[USER'S_EXACT_MESSAGE]"
+  },
+  {
+    "role": "assistant",
+    "content": "[YOUR_EXACT_RESPONSE]"
+  }
+]
+```
+
+## Complete Example Flow
+
+Here's exactly what to do for a new conversation:
+
+1. **User says**: "Hi Claude! My name is Sarah and I'm feeling overwhelmed with work"
+
+2. **Start conversation**:
+
+   ```text
+   start_conversation
+   ```
+
+   → Returns: `session_abc123`
+
+3. **Get insights** (optional but recommended):
+
+   ```text
+   get_personalization_insights
+   session_id: "session_abc123"
+   query: "What does the user's message about feeling overwhelmed tell me about her current state and how should I respond?"
+   ```
+
+   → Returns insights about Sarah's emotional state and preferred communication style
+
+4. **Respond to Sarah**: "Hi Sarah! I can hear that you're feeling overwhelmed with work right now..."
+
+5. **Store the turn**:
+
+   ```text
+   add_turn
+   session_id: "session_abc123"
+   messages: [
+     {
+       "role": "user",
+       "content": "Hi Claude! My name is Sarah and I'm feeling overwhelmed with work"
+     },
+     {
+       "role": "assistant",
+       "content": "Hi Sarah! I can hear that you're feeling overwhelmed with work right now..."
+     }
+   ]
+   ```
+
+## Continuing an Existing Conversation
+
+For subsequent messages in the same conversation:
+
+1. **User says**: "Thanks for listening. Can you help me prioritize my tasks?"
+
+2. **Respond**: "Based on our conversation, I can see you value..."
+
+3. **Store the turn**:
+
+   ```text
+   add_turn
+   session_id: "session_abc123"
+   messages: [
+     {
+       "role": "user",
+       "content": "Thanks for listening. Can you help me prioritize my tasks?"
+     },
+     {
+       "role": "assistant",
+       "content": "Based on our conversation, I can see you value..."
+     }
+   ]
+   ```
+
+## Best Practices for Personalization Queries
+
+Ask theory-of-mind questions that reveal:
+
+**Communication Style**: "How formal/casual should I be?" "What does this reveal about their preferences?"
+
+**User Needs**: "What are they really asking for?" "What emotional state are they in?"
+
+**Relationship**: "How can I build rapport?" "What engages them most?"
+
+**Task Approach**: "How do they prefer problem-solving?" "What detail level do they want?"
+
+## Error Handling
+
+- **Authorization Errors and Timeouts**: Make sure user has configured API key and URL for Honcho
+- **ValueError**: Messages were incorrectly formatted, make sure to include role and content
+- **"No personalization insights found"**: Normal when there's limited history with the user
+- **Session management**: The MCP server handles all session persistence automatically
+
+## Key Principles
+
+1. **Always start with `start_conversation` for new conversations**
+2. **Store every message exchange with `add_turn`**
+3. **Use `get_personalization_insights` strategically for better responses**
+4. **Ask thoughtful theory-of-mind questions**
+5. **Never expose technical details to the user**
+6. **The system maintains context automatically between sessions**
