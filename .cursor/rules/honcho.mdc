@@ -1,0 +1,199 @@
+---
+alwaysApply: true
+---
+# Honcho MCP Integration Guide
+
+## What is Honcho?
+
+Honcho is an infrastructure layer for building AI agents with social cognition and theory of mind capabilities. It enables personalized AI interactions by building coherent models of user psychology over time.
+
+**Status:** 20 out of 24 endpoints working (4 are broken due to server bugs)
+
+## Working Workflow
+
+### Step 1: Initialize Session (First Message Only)
+
+**Create Session:**
+```
+create_session
+session_id: [UNIQUE_ID]
+```
+Generate unique IDs like: `"session_" + timestamp`
+
+**Create Peers (if not already created):**
+```
+create_peer
+peer_id: "user_peer"
+```
+
+```
+create_peer
+peer_id: "assistant_peer"
+```
+
+**Add Peers to Session:**
+```
+add_peers_to_session
+session_id: [SESSION_ID]
+peer_ids: ["user_peer", "assistant_peer"]
+```
+
+### Step 2: Store Messages (After Each Exchange)
+
+Use `add_messages_to_session` to store conversation:
+
+```
+add_messages_to_session
+session_id: [SESSION_ID]
+messages: [
+  {
+    "peer_id": "user_peer",
+    "content": "[USER_MESSAGE]"
+  },
+  {
+    "peer_id": "assistant_peer",
+    "content": "[ASSISTANT_RESPONSE]"
+  }
+]
+```
+
+**Important:** Use `peer_id` (not `role`)
+
+### Step 3: Query Knowledge (Optional)
+
+Use `chat` endpoint for AI-powered queries about peer knowledge:
+
+```
+chat
+peer_id: [PEER_ID]
+query: "[NATURAL_LANGUAGE_QUESTION]"
+session_id: [SESSION_ID]  # optional
+```
+
+**Example queries:**
+- "What did the user say about X?"
+- "What topics has the user discussed?"
+- "What preferences has the user mentioned?"
+
+### Step 4: Retrieve Messages (Optional)
+
+```
+get_session_messages
+session_id: [SESSION_ID]
+```
+
+OR get optimized context:
+
+```
+get_session_context
+session_id: [SESSION_ID]
+tokens: 5000
+summary: true
+```
+
+## Complete Example
+
+**User:** "Hi! I'm working on debugging Honcho."
+
+**1. Initialize (first time only):**
+```
+create_session
+session_id: "session_20251015_001"
+
+create_peer
+peer_id: "user_peer"
+
+create_peer
+peer_id: "assistant_peer"
+
+add_peers_to_session
+session_id: "session_20251015_001"
+peer_ids: ["user_peer", "assistant_peer"]
+```
+
+**2. Respond:** "I can help you with debugging Honcho!"
+
+**3. Store exchange:**
+```
+add_messages_to_session
+session_id: "session_20251015_001"
+messages: [
+  {
+    "peer_id": "user_peer",
+    "content": "Hi! I'm working on debugging Honcho."
+  },
+  {
+    "peer_id": "assistant_peer",
+    "content": "I can help you with debugging Honcho!"
+  }
+]
+```
+
+**4. Later, query knowledge:**
+```
+chat
+peer_id: "assistant_peer"
+query: "What is the user working on?"
+```
+
+## Continuing Conversations
+
+For subsequent messages in the same session:
+
+1. Just respond to the user
+2. Store messages with `add_messages_to_session` (peers already added)
+3. Optionally query with `chat` endpoint
+
+## Additional Working Functions
+
+**Session Management:**
+- `list_sessions` - Get all sessions
+- `get_session_metadata` / `set_session_metadata`
+- `get_session_peers` - Get peers in session
+- `remove_peers_from_session` - Remove peers
+
+**Peer Management:**
+- `list_peers` - Get all peers
+- `get_peer_metadata` / `set_peer_metadata`
+
+**Search:**
+- `search_session_messages` - Search within session
+- `search_peer_messages` - Search by peer
+
+**Workspace:**
+- `get_workspace_metadata` / `set_workspace_metadata`
+
+**AI/Representation:**
+- `get_working_representation` - Get structured peer knowledge
+- `chat` ⭐ - Natural language queries
+
+## Known Issues (Server Bugs)
+
+**❌ Broken endpoints (use alternatives):**
+
+1. `start_conversation` → Use `create_session`
+2. `add_turn` → Use `add_messages_to_session`
+3. `get_personalization_insights` → Use `chat` endpoint
+4. `search_workspace` → Use `search_session_messages`
+
+## Key Principles
+
+1. **Always use `create_session`** for new conversations (with unique IDs)
+2. **Create peers once**, then reuse across sessions
+3. **Store messages with `add_messages_to_session`** (use `peer_id`, not `role`)
+4. **Use `chat` endpoint** for AI-powered knowledge queries
+5. **Never expose technical details** to the user
+6. **Sessions persist automatically** across interactions
+
+## Error Handling
+
+- **Authorization errors:** Check API key and headers are configured
+- **ValueError:** Ensure messages include `peer_id` and `content`
+- **500/404 errors:** Likely using broken endpoints (see Known Issues above)
+
+## Technical Details
+
+- **Endpoint:** https://mcp.honcho.dev
+- **Package:** mcp-remote v0.1.29
+- **Success rate:** 20/24 endpoints working (83%)
+- **Tested:** October 15, 2025
