@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import requests
 import yaml
-from openai import OpenAI
+import openai
 from dotenv import load_dotenv
 
 try:
@@ -68,7 +68,7 @@ class DirectoryLayout:
         self.figures = self.base_dir / "figures"
 
     def ensure(self) -> None:
-        for path in (self.ingest, self.processed, self.searchable):
+        for path in (self.ingest, self.processed, self.searchable, self.figures):
             path.mkdir(parents=True, exist_ok=True)
 
 
@@ -292,6 +292,14 @@ class NotebookProcessor:
         cell_index: int,
     ) -> str:
         buffer: List[str] = []
+        # Ensure target directory for figures exists
+        images_dir = self.layout.figures / slug
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Compute relative path from markdown location (searchable) to figures dir
+        relative_images_dir = Path(os.path.relpath(images_dir, start=self.layout.searchable))
+
+        image_seq = 0
         for output in outputs:
             output_type = output.get("output_type")
             if output_type in {"stream", "execute_result"}:
@@ -302,12 +310,47 @@ class NotebookProcessor:
                     buffer.append(f"```\n{text.rstrip()}\n```\n\n")
             if output_type in {"display_data", "execute_result"}:
                 data = output.get("data", {})
+                # Handle PNG
                 if "image/png" in data:
-                    encoded = data["image/png"]
-                    buffer.append(f"![Output](data:image/png;base64,{encoded})\n\n")
+                    encoded: str = data["image/png"]
+                    image_seq += 1
+                    filename = f"{slug}-cell{cell_index}-img{image_seq}.png"
+                    target_path = images_dir / filename
+                    try:
+                        target_path.write_bytes(base64.b64decode(encoded))
+                        rel_ref = relative_images_dir / filename
+                        buffer.append(f"![Output]({rel_ref.as_posix()})\n\n")
+                    except Exception:
+                        # Fallback to embedding if file write fails
+                        buffer.append(f"![Output](data:image/png;base64,{encoded})\n\n")
+                # Handle JPEG
                 elif "image/jpeg" in data:
-                    encoded = data["image/jpeg"]
-                    buffer.append(f"![Output](data:image/jpeg;base64,{encoded})\n\n")
+                    encoded: str = data["image/jpeg"]
+                    image_seq += 1
+                    filename = f"{slug}-cell{cell_index}-img{image_seq}.jpg"
+                    target_path = images_dir / filename
+                    try:
+                        target_path.write_bytes(base64.b64decode(encoded))
+                        rel_ref = relative_images_dir / filename
+                        buffer.append(f"![Output]({rel_ref.as_posix()})\n\n")
+                    except Exception:
+                        buffer.append(f"![Output](data:image/jpeg;base64,{encoded})\n\n")
+                # Handle SVG (often provided as XML string)
+                elif "image/svg+xml" in data:
+                    svg_content = data["image/svg+xml"]
+                    # nbformat may provide list of strings; join if needed
+                    if isinstance(svg_content, list):
+                        svg_content = "".join(svg_content)
+                    image_seq += 1
+                    filename = f"{slug}-cell{cell_index}-img{image_seq}.svg"
+                    target_path = images_dir / filename
+                    try:
+                        target_path.write_text(svg_content, encoding="utf-8")
+                        rel_ref = relative_images_dir / filename
+                        buffer.append(f"![Output]({rel_ref.as_posix()})\n\n")
+                    except Exception:
+                        # As last resort, drop embedding for SVG to avoid huge markdown
+                        pass
             if output_type == "error":
                 traceback = "\n".join(output.get("traceback", []))
                 buffer.append(
@@ -354,7 +397,13 @@ class VisionAnnotator:
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
             raise RuntimeError("OPENAI_API_KEY not set")
-        self.client = OpenAI(api_key=key)
+        # Support both OpenAI SDK v1 (client class) and legacy v0 style
+        self._use_v1 = hasattr(openai, "OpenAI")
+        if self._use_v1:
+            self.client = openai.OpenAI(api_key=key)
+        else:
+            openai.api_key = key
+            self.client = openai
 
     def _image_description(self, reference: str, base_dir: Path) -> Optional[str]:
         if reference.startswith("http://") or reference.startswith("https://"):
@@ -391,12 +440,20 @@ class VisionAnnotator:
                 "type": "image_url",
                 "image_url": {"url": f"data:image/png;base64,{encoded}", "detail": "low"},
             }
-        response = self.client.chat.completions.create(
+        if self._use_v1:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": [{"type": "text", "text": IMAGE_PROMPT}, image_payload]}],
+                max_tokens=200,
+            )
+            return response.choices[0].message.content.strip()
+        # Legacy SDK path
+        response = self.client.ChatCompletion.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": [{"type": "text", "text": IMAGE_PROMPT}, image_payload]}],
+            messages=[{"role": "user", "content": IMAGE_PROMPT}, {"role": "user", "content": image_payload.get("image_url", {}).get("url", "")}],
             max_tokens=200,
         )
-        return response.choices[0].message.content.strip()
+        return response["choices"][0]["message"]["content"].strip()
 
     @staticmethod
     def _should_skip(alt_text: str, reference: str, base_dir: Path) -> bool:
